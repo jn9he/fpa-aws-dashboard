@@ -12,6 +12,7 @@ from utils.data_loader import (
 from utils.forecast_engine import forecast_labor, labor_monthly_summary
 
 apply_theme()
+st.markdown("<div style='padding-top: 3rem;'></div>", unsafe_allow_html=True)
 
 roster, project, eta, aws_raw = load_data()
 labor_df = forecast_labor(eta, roster, project)

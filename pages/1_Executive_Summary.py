@@ -12,6 +12,7 @@ from utils.forecast_engine import (
 )
 
 apply_theme()
+st.markdown("<div style='padding-top: 3rem;'></div>", unsafe_allow_html=True)
 
 # Load and compute
 roster, project, eta, aws_raw = load_data()

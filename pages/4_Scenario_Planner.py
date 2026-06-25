@@ -9,12 +9,13 @@ from utils.data_loader import (
 from utils.forecast_engine import forecast_labor
 
 apply_theme()
+st.markdown("<div style='padding-top: 3rem;'></div>", unsafe_allow_html=True)
 
 roster, project, eta, aws_raw = load_data()
 labor_df = forecast_labor(eta, roster, project)
 
 # --- Group Filters ---
-st.markdown("### Employee Filter")
+# st.markdown("### Employee Filter")
 f1, f2 = st.columns(2)
 svp_opts = ["All"] + sorted(labor_df["Supervisor 3"].dropna().unique().tolist())
 type_opts = ["All"] + sorted(labor_df["Type"].dropna().unique().tolist())
@@ -114,7 +115,14 @@ if whatif_action == "Transfer Employee":
         total_moved = result_df["Hrs Moved"].sum()
         cost_impact = total_moved * rate
         st.metric("Total Hours Transferred", f"{total_moved:.0f} hrs")
-        st.caption(f"Cost redistribution: ${cost_impact:,.0f} moved from **{tf_source}** → **{tf_dest}** (net budget impact: $0)")
+        st.markdown(
+            f'<div style="background:#FDF6EC;border:1.5px solid #C4C9D2;border-radius:0.5rem;padding:1rem 1.25rem;margin-top:0.5rem;">'
+            f'<span style="font-size:1.3rem;font-weight:700;color:#2D3748;">'
+            f'Cost Redistribution: <span style="color:#DD6B20;">${cost_impact:,.0f}</span></span><br>'
+            f'<span style="font-size:1.05rem;color:#4A5568;">'
+            f'{tf_source} → {tf_dest} &nbsp;·&nbsp; Net budget impact: <strong>$0</strong></span></div>',
+            unsafe_allow_html=True,
+        )
 
         # Constraint check
         emp_total_hrs = emp_rows[FORECAST_MONTHS].sum().to_dict()

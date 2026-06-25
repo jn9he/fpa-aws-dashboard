@@ -42,15 +42,77 @@ def apply_theme():
     [data-testid="stMetricValue"] { color: """ + DARK_EARTH + """; }
     [data-testid="stMetricLabel"] { color: """ + SLATE + """; }
 
-    /* Navigation bar styling */
-    [data-testid="stNavigation"],
-    [data-testid="stTopNavigation"],
-    nav, [role="navigation"] {
-        border-bottom: 3px solid """ + BORDER + """ !important;
-        border-top: 3px solid """ + BORDER + """ !important;
-        padding: 1rem 2rem !important;
-        background-color: """ + CREAM + """ !important;
+    .rc-overflow {
+        position: fixed !important;
+        top: 1rem !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+
+        z-index: 9999 !important;
+
+        background-color: #fef9f3 !important; /* adjust as needed */
+        border: 2px solid #c0b599 !important; /* square border color */
+        padding: 0.5rem 1rem !important;
+        border-radius: 6px !important; /* slightly rounded corners */
+        box-shadow: 0 3px 10px rgba(0,0,0,0.08) !important; /* decreased drop shadow */
+
+        display: flex !important;
+        gap: 1rem !important; /* space between nav items */
+        width: auto !important;
+        max-width: 90vw !important;
     }
+
+    /* Style each nav item container */
+    .rc-overflow-item {
+        opacity: 1 !important;
+        order: initial !important;
+    }
+
+    /* Style the nav links as buttons with clean square borders */
+    a[data-testid="stTopNavLink"] {
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+        color: #2d3748 !important; /* dark slate color */
+        padding: 0.375rem 0.75rem !important;
+        border: 1px solid transparent !important;
+        border-radius: 6px !important; /* slightly rounded corners */
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.4rem !important;
+        text-decoration: none !important;
+        white-space: nowrap !important;
+        transition: background-color 0.25s ease, border-color 0.25s ease;
+    }
+
+    /* Hover effect */
+    /* Remove border on hover but keep background and shadow */
+    a[data-testid="stTopNavLink"]:hover {
+        background-color: #e2d8bc !important;
+        border-color: transparent !important; /* removed border on hover */
+        color: #1a202c !important;
+        /* keep shadow from navbar container */
+    }
+
+    /* Active/current page highlight */
+    a[data-testid="stTopNavLink"][aria-current="page"] {
+        background-color: #c0b599 !important;
+        color: white !important;
+        border-color: #c0b599 !important;
+    }
+
+    /* Icon styling */
+    a[data-testid="stTopNavLink"] span[role="img"],
+    a[data-testid="stTopNavLink"] span[data-testid="stIconMaterial"] {
+        font-size: 1.2rem !important;
+        color: inherit !important;
+    }
+
+    /* Adjust main content to not hide behind fixed navbar */
+    .main .block-container {
+        padding-top: 4rem !important;
+    }
+
+
     [data-testid="stNavigation"] a,
     [data-testid="stNavigation"] span,
     nav a, nav span {
@@ -87,3 +149,5 @@ def apply_theme():
     }
     </style>
     """, unsafe_allow_html=True)
+
+

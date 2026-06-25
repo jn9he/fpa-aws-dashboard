@@ -9,6 +9,7 @@ from utils.data_loader import (
 from utils.forecast_engine import forecast_aws, aws_monthly_summary, build_aws_validation_summary
 
 apply_theme()
+st.markdown("<div style='padding-top: 3rem;'></div>", unsafe_allow_html=True)
 
 roster, _, _, aws_raw = load_data()
 aws_df = forecast_aws(aws_raw)
@@ -17,7 +18,7 @@ aws_df = forecast_aws(aws_raw)
 aws_df = aws_df.merge(roster[["Employee ID", "Supervisor 3"]], on="Employee ID", how="left")
 
 # --- Filters ---
-st.markdown("### Filters")
+# st.markdown("### Filters")
 f1, f2 = st.columns(2)
 svp_opts = ["All"] + sorted(aws_df["Supervisor 3"].dropna().unique().tolist())
 with f1:
@@ -31,56 +32,21 @@ filtered = emp_pool if not sel_emps else emp_pool[emp_pool["Employee Name"].isin
 
 aws_val = build_aws_validation_summary(filtered)
 
-# --- Alert banner ---
-if aws_val["Over Cap"]:
-    st.markdown(f"""
-    <div style="border-left: 4px solid #C53030; background: #FDF6EC; padding: 1rem 1.25rem;
-                border-radius: 0.25rem; margin-bottom: 1.5rem; color: #2D3748;">
-        <strong>⚠ AWS forecast (${aws_val['Total AWS Forecast']:,.0f}) exceeds the ${AWS_CAP:,.0f} annual cap
-        by ${abs(aws_val['Variance to Cap']):,.0f}.</strong>
-    </div>
-    """, unsafe_allow_html=True)
-
 # --- KPI row ---
+st.markdown("""
+<style>
+div[data-testid="stMetric"] {
+    height: 140px;
+}
+</style>
+""", unsafe_allow_html=True)
+
 c1, c2, c3 = st.columns(3)
 c1.metric("AWS Full Year Forecast", f"${aws_val['Total AWS Forecast']:,.0f}")
 c2.metric("Annual Cap", f"${AWS_CAP:,.0f}")
 c3.metric("Variance to Cap", f"${aws_val['Variance to Cap']:,.0f}",
           delta="Under" if not aws_val["Over Cap"] else "OVER",
           delta_color="normal" if not aws_val["Over Cap"] else "inverse")
-
-# --- Top 5 Account KPIs ---
-st.markdown("### Top 5 Cost-Driving Accounts")
-acct_totals = filtered.groupby(["Account Number", "Employee Name"], as_index=False)["Full Year Forecast"].sum()
-acct_totals = acct_totals.nlargest(5, "Full Year Forecast")
-total_all = filtered["Full Year Forecast"].sum()
-
-cols = st.columns(5)
-for i, (_, row) in enumerate(acct_totals.iterrows()):
-    pct = row["Full Year Forecast"] / total_all * 100 if total_all > 0 else 0
-    cols[i].metric(row["Account Number"], f"${row['Full Year Forecast']:,.0f}",
-                   delta=f"{pct:.1f}% of total")
-    cols[i].caption(row["Employee Name"])
-
-# --- Cost / Billed / Revenue line chart ---
-st.markdown("### Monthly Cost, Billed Amount & Revenue")
-
-monthly_cost = [filtered[m].sum() for m in MONTHS]
-monthly_billed = [c * 1.1 for c in monthly_cost]
-monthly_revenue = [c * 1.3 for c in monthly_cost]
-
-fig_rev = go.Figure()
-fig_rev.add_trace(go.Scatter(x=MONTHS, y=monthly_cost, mode="lines+markers",
-                             name="Cost", line=dict(color=COLOR_AWS, width=2)))
-fig_rev.add_trace(go.Scatter(x=MONTHS, y=monthly_billed, mode="lines+markers",
-                             name="Billed Amount (1.1×)", line=dict(color=COLOR_ACTUAL, width=2, dash="dash")))
-fig_rev.add_trace(go.Scatter(x=MONTHS, y=monthly_revenue, mode="lines+markers",
-                             name="Revenue (1.3×)", line=dict(color="#38A169", width=2)))
-fig_rev.update_layout(template="plotly_white", height=380, yaxis_title="Amount ($)",
-                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                      margin=dict(l=60, r=20, t=20, b=40),
-                      legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5))
-st.plotly_chart(fig_rev, width="stretch")
 
 # --- Cumulative spend vs cap ---
 st.markdown("### Cumulative AWS Spend vs Cap")
@@ -104,6 +70,43 @@ fig_cum.update_layout(
     margin=dict(l=60, r=20, t=20, b=40),
 )
 st.plotly_chart(fig_cum, width="stretch")
+
+# --- Top 5 Account KPIs ---
+st.markdown("### Top 5 Cost-Driving Accounts")
+acct_totals = filtered.groupby(["Account Number", "Employee Name"], as_index=False)["Full Year Forecast"].sum()
+acct_totals = acct_totals.nlargest(5, "Full Year Forecast")
+total_all = filtered["Full Year Forecast"].sum()
+acct_totals["% of Total"] = acct_totals["Full Year Forecast"] / total_all * 100 if total_all > 0 else 0
+st.dataframe(
+    acct_totals[["Account Number", "Employee Name", "Full Year Forecast", "% of Total"]].style.format(
+        {"Full Year Forecast": "${:,.0f}", "% of Total": "{:.1f}%"}
+    ),
+    hide_index=True,
+    use_container_width=True,
+)
+
+# # --- Cumulative spend vs cap ---
+# st.markdown("### Cumulative AWS Spend vs Cap")
+
+# aws_month = aws_monthly_summary(filtered)
+# aws_month["Cumulative"] = aws_month["AWS Cost"].cumsum()
+
+# fig_cum = go.Figure()
+# fig_cum.add_trace(go.Scatter(
+#     x=aws_month["Month"], y=aws_month["Cumulative"],
+#     mode="lines+markers", fill="tozeroy",
+#     line=dict(color=COLOR_AWS, width=2), fillcolor="rgba(214,158,46,0.15)",
+#     name="Cumulative Spend",
+# ))
+# fig_cum.add_hline(y=AWS_CAP, line_dash="dash", line_color=COLOR_ALERT,
+#                   annotation_text=f"Cap: ${AWS_CAP:,.0f}", annotation_position="top left")
+# fig_cum.update_layout(
+#     xaxis=dict(categoryorder="array", categoryarray=MONTHS),
+#     yaxis_title="Cumulative Cost ($)", template="plotly_white", height=380,
+#     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+#     margin=dict(l=60, r=20, t=20, b=40),
+# )
+# st.plotly_chart(fig_cum, width="stretch")
 
 # --- Account Trends + Stacked (side by side) ---
 acct_long = filtered.melt(
@@ -150,5 +153,4 @@ st.markdown(f"""
 - **Growth accounts** ({', '.join(AWS_GROWTH_ACCOUNTS)}): 5% month-over-month from March.
 - **All other accounts**: Jan–Mar weighted average applied to Apr–Dec.
 - Annual cap monitored at **${AWS_CAP:,.0f}**.
-- **Billed Amount**: Cost × 1.1 (mock). **Revenue**: Cost × 1.3 (mock).
 """)
