@@ -1,0 +1,16 @@
+[server]
+enableStaticServing = true
+
+[theme]
+base = "light"
+primaryColor = "#DD6B20"
+backgroundColor = "#FFFAF0"
+secondaryBackgroundColor = "#FDF6EC"
+textColor = "#2D3748"
+borderColor = "#C4C9D2"
+baseRadius = "0.5rem"
+showWidgetBorder = true
+linkColor = "#DD6B20"
+
+[theme.sidebar]
+backgroundColor = "#FDF6EC"
