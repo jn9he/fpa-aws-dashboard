@@ -8,7 +8,7 @@ A Streamlit-based financial planning & analysis dashboard for AWS resource and c
 - **Resource Forecasting** — Staff allocation and capacity planning
 - **AWS Forecasting** — Cloud cost projections and trend analysis
 - **Scenario Planner** — What-if modeling with adjustable parameters
-- **AI Insights** — LLM-powered analysis via OpenAI and LangChain RAG
+- **AI Insights** — LLM-powered analysis via OpenAI and LangChain RAG running Pandas
 
 ## Quick Start
 
