@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 251 249 255; /* #fbf9ff */
+    --foreground: 0 8 7; /* #000807 */
+    --card: 245 243 250; /* slightly off from bg */
+    --card-foreground: 0 8 7;
+    --primary: 17 95 160; /* #115fa0 */
+    --primary-foreground: 251 249 255;
+    --accent: 179 183 238; /* #b3b7ee */
+    --accent-foreground: 0 8 7;
+    --muted: 162 163 187; /* #a2a3bb */
+    --muted-foreground: 80 82 100;
+    --border: 194 196 210;
+    --ring: 17 95 160;
+    --chart-1: 17 95 160;
+    --chart-2: 179 183 238;
+    --chart-3: 162 163 187;
+    --chart-4: 60 130 190;
+    --chart-5: 100 110 160;
+  }
+
+  .dark {
+    --background: 0 8 7; /* #000807 */
+    --foreground: 251 249 255; /* #fbf9ff */
+    --card: 10 20 18;
+    --card-foreground: 251 249 255;
+    --primary: 17 95 160; /* #115fa0 */
+    --primary-foreground: 251 249 255;
+    --accent: 179 183 238; /* #b3b7ee */
+    --accent-foreground: 0 8 7;
+    --muted: 162 163 187; /* #a2a3bb */
+    --muted-foreground: 200 202 220;
+    --border: 40 50 55;
+    --ring: 179 183 238;
+    --chart-1: 179 183 238;
+    --chart-2: 17 95 160;
+    --chart-3: 162 163 187;
+    --chart-4: 100 160 220;
+    --chart-5: 140 145 190;
+  }
+}
+
+@layer base {
+  * {
+    border-color: rgb(var(--border));
+  }
+  body {
+    background-color: rgb(var(--background));
+    color: rgb(var(--foreground));
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+}

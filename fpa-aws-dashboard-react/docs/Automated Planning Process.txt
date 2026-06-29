@@ -1,0 +1,28 @@
+Automated Planning Process
+2026 Summer Internship Use Case
+
+Overview:
+Build an automated planning application/tool that can be utilized across the company
+" - Utilize this dataset which mimics Spectrum data to build a planning application/tool to forecast for two large areas within this sample Spectrum business unit:
+1. Resource project and cost forecasting
+2. AWS hosting cost forecasting"
+ - Resource budgeting will require the use of the following tabs; Roster, Project List & Employee Time Allocation. Utilize all 3 to build a cost calculation model by month to project costs for multiple layers (i.e. Accounting Classification, Project, Employee Type, Leader, Funding Business Unit, etc.).
+ - AWS hosting fees are not currently mapped to a project; build a model that will utilize advanced analytics/trend analysis to calculate estimated costs by month for each AWS sample account.
+ - Focus on the process, data connections and reporting output of the tool.
+- Put yourself in the shoes of each leader of this organization and feel free to make up assumptions outside of those listed below. In a real year, resources will move around to different projects or we'll surge work on a few projects for several months and then get back to run rate work. Be creative and make the model easy to use and report on. See if AI can help explain the numbers or tell the story of the organization. 
+
+Data Files & Process:
+Roster: Sample data with organizational hierarchy similar to how teams are structured across Spectrum. This tab gives information on employee ID, employee name, their location, pay rates and other relevant Human Resource information.
+Project List: Whether you're supporting Customer Operations, Field Operations or Technology, budgets are built around projects. This tab gives project numbers, project names, accounting classification and funding business unit. Utilize this tab as a reference to forecast future month's costs on the 'Employee Time Allocation' tab.
+Employee Time Allocation: Across the company, we have a few time tracking systems; utilize this view to create a forecast by employee and project. This tab gives information to identify the employee, which project they're working on and the amount of hours per month on each project.
+AWS Model: Sample and simplified AWS account structure. This tab details the AWS account number and the owner of the account. Utilize advanced analytics/trend analysis to fill in the remaining months.
+
+Assumptions:
+- All data and costs have been populated through March. Use model, assumptions and tool to project costs for April through December and come up with a full year budget/forecast.
+- All resources will have 160 hours in total per month.
+- FTE resources will take a maximum of 160 hours of 'Paid Time Off' during the year; they will not have more allocated to them.
+- Contractor resources will take a maximum of 120 hours of 'Paid Time Off' during the year; they will not have more allocated to them.
+- Roster will not fluctuate throughout the year (no hires and no attrition).
+- Projects 10 and 14 will end at the end of August; any resources working on those projects can be reallocated to other existing projects they are working on or to general opex.
+- Total AWS spend for this business unit shall not exceed $2.1m for the year.
+- AWS accounts ending in 8, 11 and 27 will grow 5% month over month from March; all remaining AWS accounts can be allocated costs based on their YTD weighted average.
