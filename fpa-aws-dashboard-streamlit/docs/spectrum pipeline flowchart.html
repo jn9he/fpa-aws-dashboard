@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spectrum AWS Pipeline</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #002B4E;
+    --blue: #0057A8;
+    --sky: #5BA4E5;
+    --pale: #E8F3FC;
+    --green: #0A6E55;
+    --green-light: #E0F2EC;
+    --amber: #7A4500;
+    --amber-light: #FEF0DC;
+    --purple: #3B2F8F;
+    --purple-light: #ECEAFD;
+    --coral: #8C2C18;
+    --gray: #F4F5F7;
+    --border: #D8E3EE;
+    --text: #0D1B2A;
+    --muted: #556070;
+    --white: #FFFFFF;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: #F0F4F9; min-height: 100vh; padding: 40px 24px 60px; color: var(--text); }
+  .page { max-width: 960px; margin: 0 auto; }
+
+  .header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 40px; flex-wrap: wrap; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-mark { width: 44px; height: 44px; background: var(--navy); border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+  .brand-mark svg { width: 26px; height: 26px; }
+  .brand-text h1 { font-size: 20px; font-weight: 600; color: var(--navy); letter-spacing: -.3px; }
+  .brand-text p { font-size: 13px; color: var(--muted); margin-top: 1px; }
+  .badge-poc { font-size: 11px; font-weight: 500; padding: 5px 12px; border-radius: 99px; background: var(--pale); color: var(--blue); border: 1px solid #C2DBF5; align-self: flex-start; margin-top: 4px; font-family: 'DM Mono', monospace; letter-spacing: .02em; }
+
+  .pipeline { display: flex; flex-direction: column; gap: 0; }
+
+  .phase-label { font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; padding-left: 4px; }
+
+  .node { background: var(--white); border: 1.5px solid var(--border); border-radius: 16px; padding: 20px 24px; position: relative; transition: box-shadow .2s, transform .2s; cursor: default; }
+  .node:hover { box-shadow: 0 8px 24px rgba(0,60,120,0.10); transform: translateY(-2px); }
+  .node-inner { display: flex; align-items: flex-start; gap: 16px; }
+  .node-icon { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 22px; }
+  .node-body { flex: 1; }
+  .node-title { font-size: 16px; font-weight: 600; color: var(--navy); margin-bottom: 3px; letter-spacing: -.2px; }
+  .node-sub { font-size: 12px; font-family: 'DM Mono', monospace; color: var(--muted); margin-bottom: 8px; }
+  .node-desc { font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .node-tag { font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 99px; margin-left: auto; flex-shrink: 0; align-self: flex-start; white-space: nowrap; font-family: 'DM Mono', monospace; }
+
+  .connector { display: flex; flex-direction: column; align-items: center; padding: 6px 0; gap: 2px; }
+  .conn-line { width: 2px; height: 20px; background: linear-gradient(to bottom, var(--border), var(--sky)); border-radius: 99px; }
+  .conn-arrow { width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-top: 9px solid var(--sky); }
+  .conn-label { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; background: #EEF4FB; padding: 2px 10px; border-radius: 99px; border: 1px solid var(--border); margin: 2px 0; letter-spacing: .02em; }
+
+  .output-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .output-card { background: var(--white); border: 1.5px solid var(--border); border-radius: 14px; padding: 16px; text-align: center; transition: box-shadow .2s, transform .2s; }
+  .output-card:hover { box-shadow: 0 6px 18px rgba(0,60,120,0.09); transform: translateY(-2px); }
+  .output-icon { font-size: 26px; margin-bottom: 8px; }
+  .output-title { font-size: 13px; font-weight: 600; color: var(--navy); margin-bottom: 4px; }
+  .output-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+  .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 36px; padding-top: 20px; border-top: 1px solid var(--border); }
+  .legend-item { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+  .ic-aws { background: #E8F3FC; }
+  .ic-s3  { background: var(--amber-light); }
+  .ic-kiro { background: var(--purple-light); }
+  .ic-glue { background: var(--green-light); }
+  .ic-db  { background: #FDE8E8; }
+
+  .tag-aws  { background: var(--pale); color: var(--blue); }
+  .tag-s3   { background: var(--amber-light); color: var(--amber); }
+  .tag-kiro { background: var(--purple-light); color: var(--purple); }
+  .tag-glue { background: var(--green-light); color: var(--green); }
+  .tag-db   { background: #FDE8E8; color: var(--coral); }
+
+  @media (max-width: 600px) { .output-row { grid-template-columns: 1fr; } .header { flex-direction: column; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 26 26" fill="none">
+          <rect x="2" y="2" width="10" height="10" rx="2" fill="white" opacity=".9"/>
+          <rect x="14" y="2" width="10" height="10" rx="2" fill="white" opacity=".6"/>
+          <rect x="2" y="14" width="10" height="10" rx="2" fill="white" opacity=".6"/>
+          <rect x="14" y="14" width="10" height="10" rx="2" fill="white" opacity=".3"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>Automated Budgeting &amp; Forecasting</h1>
+        <p>AWS Pipeline · Kickoff Meeting 2026</p>
+      </div>
+    </div>
+    <span class="badge-poc">Proof of Concept</span>
+  </div>
+
+  <div class="pipeline">
+
+    <p class="phase-label">Step 1 · Data Generation</p>
+    <div class="node">
+      <div class="node-inner">
+        <div class="node-icon ic-aws">&#9729;&#65039;</div>
+        <div class="node-body">
+          <div class="node-title">AWS Data Exports</div>
+          <div class="node-sub">Billing &amp; Cost Management &gt; Data Exports</div>
+          <div class="node-desc">AWS automatically generates a detailed cost report on a schedule (daily or monthly) covering every service including EC2, RDS, S3 and EKS. Nobody has to manually download anything. The report is produced and sent automatically.</div>
+        </div>
+        <span class="node-tag tag-aws">AWS Native</span>
+      </div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-line"></div>
+      <span class="conn-label">auto-saves CSV file</span>
+      <div class="conn-arrow"></div>
+    </div>
+
+    <p class="phase-label">Step 2 · File Storage</p>
+    <div class="node">
+      <div class="node-inner">
+        <div class="node-icon ic-s3">&#129531;</div>
+        <div class="node-body">
+          <div class="node-title">Amazon S3 Bucket</div>
+          <div class="node-sub">Simple Storage Service · cloud file storage</div>
+          <div class="node-desc">The cost report CSV lands here automatically. Think of S3 as a cloud folder. AWS drops the file in and our pipeline picks it up from here. This is the handoff point between what AWS does automatically and what our pipeline does next.</div>
+        </div>
+        <span class="node-tag tag-s3">Storage</span>
+      </div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-line"></div>
+      <span class="conn-label">new file detected · pipeline starts</span>
+      <div class="conn-arrow"></div>
+    </div>
+
+    <p class="phase-label">Step 3 · Orchestration</p>
+    <div class="node">
+      <div class="node-inner">
+        <div class="node-icon ic-kiro">&#127763;&#65039;</div>
+        <div class="node-body">
+          <div class="node-title">AWS Kiro</div>
+          <div class="node-sub">Workflow orchestration · the pipeline manager</div>
+          <div class="node-desc">Kiro detects when a new cost report file arrives in S3 and kicks off the rest of the pipeline in the right order. It tells Glue to start cleaning the data, waits for it to finish, then triggers the next step. This is where the actual coding lives.</div>
+        </div>
+        <span class="node-tag tag-kiro">Coding required</span>
+      </div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-line"></div>
+      <span class="conn-label">triggers data cleaning job</span>
+      <div class="conn-arrow"></div>
+    </div>
+
+    <p class="phase-label">Step 4 · Data Cleaning</p>
+    <div class="node">
+      <div class="node-inner">
+        <div class="node-icon ic-glue">&#129529;</div>
+        <div class="node-body">
+          <div class="node-title">AWS Glue</div>
+          <div class="node-sub">ETL · Extract, Transform, Load</div>
+          <div class="node-desc">Glue takes the raw CSV file and cleans it up. It removes blank rows, fixes inconsistent formatting, applies the tagging labels, and reshapes everything into a clean standardized format ready for analysis.</div>
+        </div>
+        <span class="node-tag tag-glue">ETL</span>
+      </div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-line"></div>
+      <span class="conn-label">loads clean data into</span>
+      <div class="conn-arrow"></div>
+    </div>
+
+    <p class="phase-label">Step 5 · Central Data Store</p>
+    <div class="node">
+      <div class="node-inner">
+        <div class="node-icon ic-db">&#128452;&#65039;</div>
+        <div class="node-body">
+          <div class="node-title">Central Database</div>
+          <div class="node-sub">Amazon Athena (recommended for PoC) · or RDS · or Redshift</div>
+          <div class="node-desc">One single place where all the clean, processed cost data lives. Instead of scattered spreadsheets across different systems, everything is here organized, up to date, and ready to query for reporting and forecasting.</div>
+        </div>
+        <span class="node-tag tag-db">Data Store</span>
+      </div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-line"></div>
+      <span class="conn-label">data ready to use</span>
+      <div class="conn-arrow"></div>
+    </div>
+
+    <p class="phase-label">Step 6 · Team Outputs</p>
+    <div class="output-row">
+      <div class="output-card">
+        <div class="output-icon">&#128200;</div>
+        <div class="output-title">Spend Forecast</div>
+        <div class="output-desc">A model predicting future costs based on historical trends in the clean data.</div>
+      </div>
+      <div class="output-card">
+        <div class="output-icon">&#128203;</div>
+        <div class="output-title">Stakeholder Report</div>
+        <div class="output-desc">A simple, readable weekly cost summary for executives. No jargon, just the key numbers.</div>
+      </div>
+      <div class="output-card">
+        <div class="output-icon">&#127908;</div>
+        <div class="output-title">Showcase Pitch</div>
+        <div class="output-desc">The final presentation telling the before vs. after story to Spectrum leadership.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>AWS Native (no code)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>Storage layer</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Orchestration (coding)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Data cleaning (coding)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--coral)"></div>Central data store</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#888"></div>Team output (no code)</div>
+  </div>
+
+</div>
+</body>
+</html>
