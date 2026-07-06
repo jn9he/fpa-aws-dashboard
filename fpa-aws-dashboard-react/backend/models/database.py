@@ -5,8 +5,7 @@ import json
 import os
 from pathlib import Path
 
-# In production (Azure Container App), DATABASE_URL is set via env var
-# pointing to the mounted volume (e.g. sqlite:////mnt/dbdata/scenarios.db).
+# In production (Azure App Service), DATABASE_URL points to persistent /home storage.
 # Locally, falls back to the data/ directory.
 _default_db = f"sqlite:///{Path(__file__).resolve().parent.parent / 'data' / 'scenarios.db'}"
 DB_URL = os.environ.get("DATABASE_URL", _default_db)
