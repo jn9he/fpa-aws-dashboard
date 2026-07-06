@@ -1,6 +1,6 @@
 # FP&A AWS Planning Dashboard
 
-A Streamlit-based financial planning & analysis dashboard for AWS resource and cost forecasting.
+React-based financial planning & analysis tool for AWS resource and cost forecasting.
 
 ## Features
 
