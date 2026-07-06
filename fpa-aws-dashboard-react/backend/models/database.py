@@ -2,10 +2,16 @@ from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from datetime import datetime
 import json
+import os
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "scenarios.db"
-engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
+# In production (Azure Container App), DATABASE_URL is set via env var
+# pointing to the mounted volume (e.g. sqlite:////mnt/dbdata/scenarios.db).
+# Locally, falls back to the data/ directory.
+_default_db = f"sqlite:///{Path(__file__).resolve().parent.parent / 'data' / 'scenarios.db'}"
+DB_URL = os.environ.get("DATABASE_URL", _default_db)
+
+engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 

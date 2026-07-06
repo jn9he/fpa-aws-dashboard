@@ -1,14 +1,20 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
 
 app = FastAPI(title="FPA AWS Dashboard API")
 
+# In production, set ALLOWED_ORIGINS to the Static Web App URL
+# e.g. "https://my-app.azurestaticapps.net"
+# Multiple origins can be comma-separated.
+origins = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
