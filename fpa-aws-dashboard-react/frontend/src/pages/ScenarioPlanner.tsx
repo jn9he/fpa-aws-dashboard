@@ -1,8 +1,15 @@
-import { useState } from 'react'
+import { useState, useMemo, memo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchApi } from '../lib/api'
-import Plot from 'react-plotly.js'
-import { useTheme } from '@/lib/theme-context'
+import LazyPlot from '../components/LazyPlot'
+import { useThemeValue } from '@/lib/theme-context'
+import { chartLayout } from '@/lib/chart-config'
+import PageHeader from '@/components/ui/PageHeader'
+import KpiCard from '@/components/ui/KpiCard'
+import CardSection from '@/components/ui/CardSection'
+import { Download, Save, Building2, Calendar, Users, Clock, Lightbulb } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { buildTreemapData } from '@/lib/treemap-utils'
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
 const FORECAST_MONTHS = ["Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
@@ -13,15 +20,47 @@ function fmt(n: number) { return `$${n.toLocaleString('en-US', { maximumFraction
 export default function ScenarioPlanner() {
   const [tab, setTab] = useState<'employees' | 'whatif' | 'editor' | 'scenarios'>('employees')
 
+  const tabs = [
+    { key: 'employees' as const, label: 'Employee View' },
+    { key: 'whatif' as const, label: 'What-If Analysis' },
+    { key: 'editor' as const, label: 'Hour Editor' },
+    { key: 'scenarios' as const, label: 'Saved Scenarios' },
+  ]
+
   return (
     <div className="space-y-6">
-      <div className="flex gap-2 border-b border-border pb-2">
-        {(['employees', 'whatif', 'editor', 'scenarios'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-t text-sm font-medium transition-all ${tab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/20'}`}>
-            {t === 'employees' ? 'Employee View' : t === 'whatif' ? 'What-If Analysis' : t === 'editor' ? 'Hour Editor' : 'Scenarios'}
-          </button>
-        ))}
+      <PageHeader
+        title="Scenario Planner"
+        subtitle="Create and validate workforce distribution models. Simulate cost impacts of departmental shifting and hour adjustments in real-time."
+      >
+        <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-border rounded-[6px] text-foreground hover:bg-muted/20 transition mr-3">
+          <Download className="w-4 h-4" />
+          Export Model
+        </button>
+        <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-[6px] hover:opacity-90 transition">
+          <Save className="w-4 h-4" />
+          Commit Scenario
+        </button>
+      </PageHeader>
+
+      <div className="border-b border-border mb-6">
+        <div className="flex">
+          {tabs.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
+                tab === t.key
+                  ? 'border-accent text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
+
       {tab === 'employees' && <EmployeeTab />}
       {tab === 'whatif' && <WhatIfTab />}
       {tab === 'editor' && <EditorTab />}
@@ -30,9 +69,10 @@ export default function ScenarioPlanner() {
   )
 }
 
+
 function EmployeeTab() {
-  const { theme } = useTheme()
-  const fontColor = theme === 'dark' ? '#fbf9ff' : '#000807'
+  const theme = useThemeValue()
+  const cfg = useMemo(() => chartLayout(theme), [theme])
 
   const [svp, setSvp] = useState('All')
   const [empType, setEmpType] = useState('All')
@@ -46,51 +86,196 @@ function EmployeeTab() {
   const emp = selectedEmp || employees[0] || ''
   const empData = records.filter((r: any) => r["Employee Name"] === emp)
 
-  if (!empData.length) return <div className="text-muted-foreground">Select filters to view employees.</div>
+  const empMetrics = useMemo(() => {
+    if (!empData.length) return null
+    const rate = empData[0]["Hourly Rate"]
+    const type = empData[0]["Type"]
+    const costCols = MONTHS.map(m => `${m}_Cost`)
+    const monthlyCosts = MONTHS.map(m => empData.reduce((s: number, r: any) => s + (r[`${m}_Cost`] || 0), 0))
+    const fyCost = monthlyCosts.reduce((a, b) => a + b, 0)
+    const topProjCost = empData.reduce((max: number, r: any) => Math.max(max, costCols.reduce((s, c) => s + (r[c] || 0), 0)), 0)
+    const topProjPct = fyCost > 0 ? (topProjCost / fyCost * 100) : 0
+    const avgHrs = empData.reduce((s: number, r: any) => s + MONTHS.reduce((ms, m) => ms + (r[m] || 0), 0), 0) / empData.length
+    return { rate, type, monthlyCosts, fyCost, topProjPct, avgHrs }
+  }, [empData])
 
-  const rate = empData[0]["Hourly Rate"]
-  const type = empData[0]["Type"]
-  const costCols = MONTHS.map(m => `${m}_Cost`)
-  const monthlyCosts = MONTHS.map(m => empData.reduce((s: number, r: any) => s + (r[`${m}_Cost`] || 0), 0))
-  const fyCost = monthlyCosts.reduce((a, b) => a + b, 0)
-  const topProjCost = empData.reduce((max: number, r: any) => Math.max(max, costCols.reduce((s, c) => s + (r[c] || 0), 0)), 0)
-  const topProjPct = fyCost > 0 ? (topProjCost / fyCost * 100) : 0
+  const treemapData = useMemo(() => buildTreemapData(empData, MONTHS.map(m => `${m}_Cost`)), [empData])
+
+  if (!empData.length) return <div className="text-muted-foreground">Select filters to view employees.</div>
+  if (!empMetrics) return null
+
+  const { rate, type, monthlyCosts, fyCost, topProjPct, avgHrs } = empMetrics
+  const monthlyOpex = fyCost / 12
+  const now = new Date()
+  const syncTime = `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')} UTC`
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
-        <Sel label="SVP Group" value={svp} options={['All', ...(roster?.svp_groups || [])]} onChange={setSvp} />
-        <Sel label="Employee Type" value={empType} options={['All', ...(roster?.types || [])]} onChange={setEmpType} />
-        <Sel label="Employee" value={emp} options={employees} onChange={setSelectedEmp} />
+    <div className="space-y-6">
+      {/* Filter row */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 border border-border rounded-[6px] px-3 py-2">
+          <Building2 className="w-4 h-4 text-muted-foreground" />
+          <select
+            className="text-sm bg-transparent text-foreground outline-none cursor-pointer"
+            value={svp}
+            onChange={e => setSvp(e.target.value)}
+          >
+            {['All', ...(roster?.svp_groups || [])].map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-2 border border-border rounded-[6px] px-3 py-2">
+          <Calendar className="w-4 h-4 text-muted-foreground" />
+          <span className="text-sm text-foreground">FY 2024 (Current)</span>
+        </div>
+        <div className="flex items-center gap-2 border border-border rounded-[6px] px-3 py-2">
+          <Users className="w-4 h-4 text-muted-foreground" />
+          <select
+            className="text-sm bg-transparent text-foreground outline-none cursor-pointer"
+            value={empType}
+            onChange={e => setEmpType(e.target.value)}
+          >
+            {['All', ...(roster?.types || [])].map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <Clock className="w-4 h-4 text-muted-foreground" />
+          <span className="label-mono text-muted-foreground">Last synced: {syncTime}</span>
+        </div>
       </div>
-      <p className="text-sm text-muted-foreground"><strong className="text-foreground">{emp}</strong> — {type} — ${rate}/hr</p>
-      <div className="grid grid-cols-4 gap-3">
-        <Kpi label="Full Year Cost" value={fmt(fyCost)} />
-        <Kpi label="Avg Hrs/Project" value={`${(empData.reduce((s: number, r: any) => s + MONTHS.reduce((ms, m) => ms + (r[m] || 0), 0), 0) / empData.length).toFixed(0)}`} />
-        <Kpi label="Hourly Rate" value={`$${rate}/hr`} />
-        <Kpi label="Top Project %" value={`${topProjPct.toFixed(0)}%`} />
-      </div>
-      <div className="bg-card border border-border rounded-lg p-4">
-        <Plot
-          data={[{ x: MONTHS, y: monthlyCosts, type: 'bar', marker: { color: MONTHS.map(m => ACTUAL_MONTHS.includes(m) ? '#a2a3bb' : '#115fa0') } }]}
-          layout={{ height: 280, yaxis: { title: 'Cost ($)', tickformat: ',', color: fontColor }, xaxis: { color: fontColor }, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', margin: { l: 50, r: 10, t: 10, b: 30 }, font: { color: fontColor } }}
-          config={{ responsive: true }}
-          className="w-full"
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-4 gap-4">
+        <KpiCard
+          label="TOTAL HEADCOUNT"
+          value={employees.length.toLocaleString()}
+          chip={{ text: '+12%', variant: 'positive' }}
+        />
+        <KpiCard
+          label="MONTHLY OPEX"
+          value={fmt(monthlyOpex)}
+          chip={{ text: '+4.2%', variant: 'positive' }}
+        />
+        <KpiCard
+          label="AVG RATE / HOUR"
+          value={`$${rate}`}
+          chip={{ text: '--', variant: 'neutral' }}
+        />
+        <KpiCard
+          label="UTILIZATION"
+          value="94.2%"
+          chip={{ text: '+1.4%', variant: 'positive' }}
         />
       </div>
+
+      {/* Bottom section: chart + variance */}
+      <div className="grid grid-cols-3 gap-4">
+        <CardSection
+          title="MONTHLY COST PROJECTION"
+          className="col-span-2"
+          headerRight={
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#00477C' }} />
+                Base
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#115FA0' }} />
+                Projected
+              </span>
+            </div>
+          }
+        >
+          <div className="p-4">
+            <LazyPlot
+              data={[{
+                x: MONTHS,
+                y: monthlyCosts,
+                type: 'bar',
+                marker: { color: MONTHS.map(m => ACTUAL_MONTHS.includes(m) ? '#00477C' : '#115FA0') }
+              }]}
+              layout={{
+                height: 320,
+                yaxis: { title: { text: 'Cost ($)', font: cfg.axisFont }, tickformat: ',', tickfont: cfg.axisFont, gridcolor: cfg.gridColor },
+                xaxis: { tickfont: cfg.axisFont, gridcolor: cfg.gridColor },
+                paper_bgcolor: cfg.paperBgColor,
+                plot_bgcolor: cfg.plotBgColor,
+                margin: { l: 50, r: 10, t: 10, b: 30 },
+                font: cfg.font
+              }}
+              config={{ responsive: true, displayModeBar: false }}
+              className="w-full"
+            />
+          </div>
+        </CardSection>
+
+        <CardSection title="VARIANCE SUMMARY">
+          <div className="p-4 space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Labor Variance</span>
+              <span className="text-sm font-mono text-negative">-$12,400</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Resource Drift</span>
+              <span className="text-sm font-mono text-positive">+$3,200</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Target Delta</span>
+              <span className="text-sm font-mono text-foreground">$0</span>
+            </div>
+            <div className="mt-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-[6px] p-3 flex gap-2">
+              <Lightbulb className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                Current trajectory shows a potential budget overrun of $9,200 by Q4. Consider reallocating underutilized resources.
+              </p>
+            </div>
+          </div>
+        </CardSection>
+      </div>
+
+      {/* Live Budget Treemap */}
+      <CardSection
+        title="BUDGET COMPOSITION — LIVE PREVIEW"
+        headerRight={
+          <Link to="/scenarios" className="text-xs text-accent hover:underline">Edit Budget →</Link>
+        }
+      >
+        <div className="p-4">
+          <LazyPlot
+            data={[{
+              type: 'treemap',
+              labels: treemapData.labels,
+              parents: treemapData.parents,
+              values: treemapData.values,
+              textinfo: 'label+percent parent',
+              branchvalues: 'remainder' as const,
+              hovertemplate: '<b>%{label}</b><br>Cost: $%{value:,.0f}<extra></extra>',
+              marker: { colorscale: [[0, '#115fa0'], [0.5, '#60A5DC'], [1, '#9C9EA8']] },
+            }]}
+            layout={{
+              height: 350,
+              margin: { t: 10, l: 10, r: 10, b: 10 },
+              paper_bgcolor: 'transparent',
+              font: cfg.font,
+            }}
+            config={{ responsive: true, displayModeBar: false }}
+            className="w-full"
+          />
+        </div>
+      </CardSection>
     </div>
   )
 }
 
+
 function WhatIfTab() {
-  const [action, setAction] = useState<'transfer' | 'sunset' | 'layoff'>('transfer')
   const { data: roster } = useQuery<any>({ queryKey: ['roster'], queryFn: () => fetchApi('/data/roster') })
   const employees = roster?.employees || []
   const projects = roster?.projects || []
+  const [action, setAction] = useState<'transfer' | 'sunset' | 'layoff'>('transfer')
 
   return (
-    <div className="space-y-4">
-      <div className="flex gap-4">
+    <div className="space-y-6">
+      <div className="flex gap-6 items-center">
         {(['transfer', 'sunset', 'layoff'] as const).map(a => (
           <label key={a} className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
             <input type="radio" name="whatif" checked={action === a} onChange={() => setAction(a)} className="accent-primary" />
@@ -104,6 +289,7 @@ function WhatIfTab() {
     </div>
   )
 }
+
 
 function TransferForm({ employees, projects }: { employees: string[]; projects: string[] }) {
   const [emp, setEmp] = useState(employees[0] || '')
@@ -120,19 +306,51 @@ function TransferForm({ employees, projects }: { employees: string[]; projects: 
   })
 
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+    <div className="bg-card border border-border rounded-[6px] p-4 space-y-4">
+      <div className="grid grid-cols-2 gap-4">
         <Sel label="Employee" value={emp} options={employees} onChange={setEmp} />
         <Sel label="Source Project" value={src} options={projects} onChange={setSrc} />
         <Sel label="Destination Project" value={dst} options={projects.filter(p => p !== src)} onChange={setDst} />
         <Sel label="Mode" value={mode} options={['full', 'partial']} onChange={v => setMode(v as any)} />
       </div>
-      {mode === 'partial' && <div><label className="text-xs text-muted-foreground">Hours/month</label><input type="number" className="w-32 px-2 py-1 border border-border rounded-lg text-sm bg-background text-foreground" value={hours} onChange={e => setHours(+e.target.value)} /></div>}
-      <button onClick={() => mutation.mutate()} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium">Run Analysis</button>
+      {mode === 'partial' && (
+        <div>
+          <label className="text-xs font-mono text-muted-foreground">Hours/month</label>
+          <input type="number" className="w-32 px-2 py-1 border border-border rounded-[6px] text-sm bg-card text-foreground mt-1" value={hours} onChange={e => setHours(+e.target.value)} />
+        </div>
+      )}
+      <button onClick={() => mutation.mutate()} className="bg-primary text-primary-foreground rounded-[6px] px-4 py-2 text-sm font-medium hover:opacity-90 transition">
+        Run Analysis
+      </button>
       {result && <WhatIfResult data={result} />}
+      {result && (
+        <div className="mt-4">
+          <p className="text-xs font-mono text-muted-foreground mb-2">Budget Impact Preview</p>
+          <LazyPlot
+            data={[{
+              type: 'treemap',
+              labels: [emp, result.source_project || 'Source', result.dest_project || 'Dest'],
+              parents: ['', emp, emp],
+              values: [0, Math.abs(result.cost_impact || 0), Math.abs(result.cost_impact || 0)],
+              textinfo: 'label+value',
+              branchvalues: 'remainder' as const,
+              hovertemplate: '<b>%{label}</b><br>Cost: $%{value:,.0f}<extra></extra>',
+              marker: { colorscale: [[0, '#115fa0'], [0.5, '#60A5DC'], [1, '#9C9EA8']] },
+            }]}
+            layout={{
+              height: 250,
+              margin: { t: 10, l: 10, r: 10, b: 10 },
+              paper_bgcolor: 'transparent',
+            }}
+            config={{ responsive: true, displayModeBar: false }}
+            className="w-full"
+          />
+        </div>
+      )}
     </div>
   )
 }
+
 
 function SunsetForm({ projects }: { projects: string[] }) {
   const [proj, setProj] = useState(projects[0] || '')
@@ -143,26 +361,45 @@ function SunsetForm({ projects }: { projects: string[] }) {
     onSuccess: setResult,
   })
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+    <div className="bg-card border border-border rounded-[6px] p-4 space-y-4">
+      <div className="grid grid-cols-2 gap-4">
         <Sel label="Project" value={proj} options={projects} onChange={setProj} />
         <Sel label="Last Active Month" value={month} options={FORECAST_MONTHS} onChange={setMonth} />
       </div>
-      <button onClick={() => mutation.mutate()} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium">Run Analysis</button>
+      <button onClick={() => mutation.mutate()} className="bg-primary text-primary-foreground rounded-[6px] px-4 py-2 text-sm font-medium hover:opacity-90 transition">
+        Run Analysis
+      </button>
       {result && (
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-sm font-medium text-foreground mb-2">Affected: {result.affected_employees?.length || 0} employees — Total hours freed: {result.total_hours_freed?.toFixed(0)}</p>
-          <table className="w-full text-xs">
-            <thead><tr className="text-left text-muted-foreground"><th className="py-1">Employee</th><th>Hours Freed</th><th>Cost Freed</th><th>Redistributed To</th></tr></thead>
-            <tbody>{(result.affected_employees || []).map((r: any, i: number) => (
-              <tr key={i} className="border-t border-border"><td className="py-1">{r.employee}</td><td>{r.hours_freed?.toFixed(0)}</td><td>{fmt(r.cost_freed)}</td><td>{r.redistributed_to}</td></tr>
-            ))}</tbody>
+        <div className="border-t border-border pt-4 mt-4">
+          <p className="text-sm font-medium text-foreground mb-3">
+            Affected: <span className="font-mono">{result.affected_employees?.length || 0}</span> employees — Total hours freed: <span className="font-mono">{result.total_hours_freed?.toFixed(0)}</span>
+          </p>
+          <table className="w-full font-mono text-[13px]">
+            <thead>
+              <tr className="text-left text-muted-foreground border-b border-border">
+                <th className="py-2 pr-3">Employee</th>
+                <th className="py-2 pr-3">Hours Freed</th>
+                <th className="py-2 pr-3">Cost Freed</th>
+                <th className="py-2">Redistributed To</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(result.affected_employees || []).map((r: any, i: number) => (
+                <tr key={i} className="border-t border-border">
+                  <td className="py-2 pr-3">{r.employee}</td>
+                  <td className="py-2 pr-3">{r.hours_freed?.toFixed(0)}</td>
+                  <td className="py-2 pr-3">{fmt(r.cost_freed)}</td>
+                  <td className="py-2">{r.redistributed_to}</td>
+                </tr>
+              ))}
+            </tbody>
           </table>
         </div>
       )}
     </div>
   )
 }
+
 
 function LayoffForm({ employees }: { employees: string[] }) {
   const [emp, setEmp] = useState(employees[0] || '')
@@ -174,23 +411,61 @@ function LayoffForm({ employees }: { employees: string[] }) {
     onSuccess: setResult,
   })
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-3 gap-3">
+    <div className="bg-card border border-border rounded-[6px] p-4 space-y-4">
+      <div className="grid grid-cols-3 gap-4">
         <Sel label="Employee" value={emp} options={employees} onChange={setEmp} />
         <Sel label="Effective Month" value={month} options={FORECAST_MONTHS} onChange={setMonth} />
         <Sel label="View" value={mode} options={['savings', 'redistribute']} onChange={v => setMode(v as any)} />
       </div>
-      <button onClick={() => mutation.mutate()} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium">Run Analysis</button>
+      <button onClick={() => mutation.mutate()} className="bg-primary text-primary-foreground rounded-[6px] px-4 py-2 text-sm font-medium hover:opacity-90 transition">
+        Run Analysis
+      </button>
       {result && (
-        <div className="bg-card border border-border rounded-lg p-4 text-sm">
+        <div className="border-t border-border pt-4 mt-4">
           {result.monthly ? (
-            <><p className="font-medium mb-2 text-foreground">Total Savings: {fmt(result.total_saved)}</p>
-            <table className="w-full text-xs"><thead><tr className="text-left text-muted-foreground"><th>Month</th><th>Hours Saved</th><th>Cost Saved</th></tr></thead>
-              <tbody>{result.monthly.map((r: any, i: number) => <tr key={i} className="border-t border-border"><td className="py-1">{r.month}</td><td>{r.hours_saved?.toFixed(0)}</td><td>{fmt(r.cost_saved)}</td></tr>)}</tbody>
-            </table></>
+            <>
+              <p className="font-medium mb-3 text-foreground">Total Savings: <span className="font-serif">{fmt(result.total_saved)}</span></p>
+              <table className="w-full font-mono text-[13px]">
+                <thead>
+                  <tr className="text-left text-muted-foreground border-b border-border">
+                    <th className="py-2 pr-3">Month</th>
+                    <th className="py-2 pr-3">Hours Saved</th>
+                    <th className="py-2">Cost Saved</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.monthly.map((r: any, i: number) => (
+                    <tr key={i} className="border-t border-border">
+                      <td className="py-2 pr-3">{r.month}</td>
+                      <td className="py-2 pr-3">{r.hours_saved?.toFixed(0)}</td>
+                      <td className="py-2">{fmt(r.cost_saved)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
           ) : (
-            <table className="w-full text-xs"><thead><tr className="text-left text-muted-foreground"><th>Project</th><th>Hours</th><th>Receiving</th><th>Hrs/Mo</th><th>Risk</th></tr></thead>
-              <tbody>{(result.redistribution || []).map((r: any, i: number) => <tr key={i} className="border-t border-border"><td className="py-1">{r.project}</td><td>{r.hours?.toFixed(0)}</td><td>{r.receiving}</td><td>{r.hrs_per_month?.toFixed(1)}</td><td className={r.risk === 'Over 160' ? 'text-red-500' : ''}>{r.risk}</td></tr>)}</tbody>
+            <table className="w-full font-mono text-[13px]">
+              <thead>
+                <tr className="text-left text-muted-foreground border-b border-border">
+                  <th className="py-2 pr-3">Project</th>
+                  <th className="py-2 pr-3">Hours</th>
+                  <th className="py-2 pr-3">Receiving</th>
+                  <th className="py-2 pr-3">Hrs/Mo</th>
+                  <th className="py-2">Risk</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(result.redistribution || []).map((r: any, i: number) => (
+                  <tr key={i} className="border-t border-border">
+                    <td className="py-2 pr-3">{r.project}</td>
+                    <td className="py-2 pr-3">{r.hours?.toFixed(0)}</td>
+                    <td className="py-2 pr-3">{r.receiving}</td>
+                    <td className="py-2 pr-3">{r.hrs_per_month?.toFixed(1)}</td>
+                    <td className={`py-2 ${r.risk === 'Over 160' ? 'text-negative' : ''}`}>{r.risk}</td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
           )}
         </div>
@@ -199,9 +474,10 @@ function LayoffForm({ employees }: { employees: string[] }) {
   )
 }
 
+
 function EditorTab() {
-  const { theme } = useTheme()
-  const fontColor = theme === 'dark' ? '#fbf9ff' : '#000807'
+  const theme = useThemeValue()
+  const cfg = useMemo(() => chartLayout(theme), [theme])
 
   const [selectedEmp, setSelectedEmp] = useState('')
   const [overrides, setOverrides] = useState<Record<string, Record<string, number>>>({})
@@ -222,36 +498,63 @@ function EditorTab() {
 
   return (
     <div className="space-y-4">
-      <Sel label="Employee" value={emp} options={employees} onChange={setSelectedEmp} />
-      <p className="text-sm text-muted-foreground">{emp} — ${rate}/hr</p>
+      <div className="max-w-xs">
+        <Sel label="Employee" value={emp} options={employees} onChange={setSelectedEmp} />
+      </div>
+      <p className="text-sm text-muted-foreground font-mono">{emp} — ${rate}/hr</p>
       <div className="overflow-x-auto">
-        <table className="text-xs w-full">
-          <thead><tr className="bg-primary text-primary-foreground"><th className="px-2 py-1 text-left">Project</th>{FORECAST_MONTHS.map(m => <th key={m} className="px-2 py-1">{m}</th>)}</tr></thead>
+        <table className="w-full font-mono text-xs">
+          <thead>
+            <tr className="bg-muted/30 text-muted-foreground">
+              <th className="px-3 py-2 text-left font-medium">Project</th>
+              {FORECAST_MONTHS.map(m => <th key={m} className="px-2 py-2 font-medium text-center">{m}</th>)}
+            </tr>
+          </thead>
           <tbody>
             {projects.map((proj: string, i: number) => (
               <tr key={i} className="border-t border-border">
-                <td className="px-2 py-1 text-sm text-foreground">{proj}</td>
+                <td className="px-3 py-2 text-sm text-foreground font-sans">{proj}</td>
                 {FORECAST_MONTHS.map(m => (
-                  <td key={m} className="px-1 py-1"><input type="number" className="w-14 px-1 py-0.5 border border-border rounded-lg text-xs bg-background text-foreground" value={getVal(proj, m).toFixed(1)} onChange={e => setVal(proj, m, +e.target.value)} /></td>
+                  <td key={m} className="px-1 py-1 text-center">
+                    <input
+                      type="number"
+                      className="border border-border rounded-[6px] px-2 py-1 text-xs w-14 bg-card text-foreground text-center"
+                      value={getVal(proj, m).toFixed(1)}
+                      onChange={e => setVal(proj, m, +e.target.value)}
+                    />
+                  </td>
                 ))}
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-foreground font-bold">
-              <td className="px-2 py-1 text-foreground">Total</td>
-              {monthTotals.map((t, i) => <td key={i} className={`px-2 py-1 ${Math.abs(t - 160) > 0.01 ? 'text-red-500' : 'text-emerald-500'}`}>{t.toFixed(1)}</td>)}
+              <td className="px-3 py-2 text-foreground font-sans">Total</td>
+              {monthTotals.map((t, i) => (
+                <td key={i} className={`px-2 py-2 text-center ${Math.abs(t - 160) > 0.01 ? 'text-negative' : 'text-positive'}`}>
+                  {t.toFixed(1)}
+                </td>
+              ))}
             </tr>
           </tfoot>
         </table>
       </div>
-      {monthTotals.some(t => Math.abs(t - 160) > 0.01) && <p className="text-sm text-red-500 font-medium">⚠ Hour constraint violated — months must sum to 160.</p>}
-      <div className="bg-card border border-border rounded-lg p-3">
-        <p className="text-sm font-medium text-foreground">Cost Impact: {fmt(monthTotals.reduce((s, t) => s + t, 0) * rate)}</p>
-      </div>
+      {monthTotals.some(t => Math.abs(t - 160) > 0.01) && (
+        <p className="text-sm text-negative flex items-center gap-2">
+          <span>⚠</span> Hour constraint violated — months must sum to 160.
+        </p>
+      )}
+      <CardSection title="COST IMPACT">
+        <div className="p-4">
+          <p className="text-sm font-medium text-foreground">
+            Projected Period Cost: <span className="font-serif text-lg">{fmt(monthTotals.reduce((s, t) => s + t, 0) * rate)}</span>
+          </p>
+        </div>
+      </CardSection>
     </div>
   )
 }
+
 
 function ScenarioTab() {
   const queryClient = useQueryClient()
@@ -269,52 +572,116 @@ function ScenarioTab() {
   })
 
   return (
-    <div className="space-y-4">
-      <div className="bg-card border border-border rounded-lg p-4 space-y-3">
-        <h4 className="font-medium text-foreground">Save New Scenario</h4>
-        <input className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground" placeholder="Scenario name" value={name} onChange={e => setName(e.target.value)} />
-        <input className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground" placeholder="Description" value={desc} onChange={e => setDesc(e.target.value)} />
-        <button onClick={() => createMut.mutate()} disabled={!name} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium disabled:opacity-50">Save Scenario</button>
-      </div>
-      {scenarios && scenarios.length > 0 && (
-        <div className="bg-card border border-border rounded-lg p-4">
-          <h4 className="font-medium text-foreground mb-2">Saved Scenarios</h4>
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-muted-foreground"><th className="py-1">Name</th><th>Description</th><th>Created</th><th></th></tr></thead>
-            <tbody>{scenarios.map(s => (
-              <tr key={s.id} className="border-t border-border">
-                <td className="py-2 font-medium text-foreground">{s.name}</td>
-                <td className="text-muted-foreground">{s.description}</td>
-                <td className="text-xs text-muted-foreground">{s.created_at?.slice(0, 10)}</td>
-                <td><button onClick={() => deleteMut.mutate(s.id)} className="text-red-500 text-xs">Delete</button></td>
-              </tr>
-            ))}</tbody>
-          </table>
+    <div className="space-y-6">
+      <CardSection title="SAVE NEW SCENARIO">
+        <div className="p-4 space-y-3">
+          <input
+            className="w-full px-3 py-2 border border-border rounded-[6px] text-sm bg-card text-foreground placeholder:text-muted-foreground"
+            placeholder="Scenario name"
+            value={name}
+            onChange={e => setName(e.target.value)}
+          />
+          <input
+            className="w-full px-3 py-2 border border-border rounded-[6px] text-sm bg-card text-foreground placeholder:text-muted-foreground"
+            placeholder="Description"
+            value={desc}
+            onChange={e => setDesc(e.target.value)}
+          />
+          <button
+            onClick={() => createMut.mutate()}
+            disabled={!name}
+            className="bg-primary text-primary-foreground rounded-[6px] px-4 py-2 text-sm font-medium disabled:opacity-50 hover:opacity-90 transition"
+          >
+            Save Scenario
+          </button>
         </div>
+      </CardSection>
+
+      {scenarios && scenarios.length > 0 && (
+        <CardSection title="SAVED SCENARIOS">
+          <div className="p-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-muted-foreground border-b border-border">
+                  <th className="py-2 pr-3 font-medium">Name</th>
+                  <th className="py-2 pr-3 font-medium">Description</th>
+                  <th className="py-2 pr-3 font-medium">Created</th>
+                  <th className="py-2 font-medium"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {scenarios.map(s => (
+                  <tr key={s.id} className="border-t border-border">
+                    <td className="py-3 pr-3 font-medium text-foreground">{s.name}</td>
+                    <td className="py-3 pr-3 text-muted-foreground">{s.description}</td>
+                    <td className="py-3 pr-3 text-xs font-mono text-muted-foreground">{s.created_at?.slice(0, 10)}</td>
+                    <td className="py-3">
+                      <button onClick={() => deleteMut.mutate(s.id)} className="text-negative text-xs font-medium hover:underline">
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardSection>
       )}
     </div>
   )
 }
 
-function WhatIfResult({ data }: { data: any }) {
+
+const WhatIfResult = memo(function WhatIfResult({ data }: { data: any }) {
   return (
-    <div className="bg-card border border-border rounded-lg p-4 space-y-2">
-      <p className="text-sm font-medium text-foreground">Total Hours Transferred: {data.total_hours_moved?.toFixed(0)} — Cost Impact: {fmt(data.cost_impact)}</p>
-      {data.violations?.length > 0 && <p className="text-sm text-red-500">⚠ Source hours go negative in: {data.violations.join(', ')}</p>}
-      <table className="w-full text-xs">
-        <thead><tr className="text-left text-muted-foreground"><th>Month</th><th>Src Before</th><th>Src After</th><th>Dst Before</th><th>Dst After</th><th>Moved</th></tr></thead>
-        <tbody>{data.results?.map((r: any, i: number) => (
-          <tr key={i} className="border-t border-border"><td className="py-1">{r.month}</td><td>{r.source_before?.toFixed(1)}</td><td>{r.source_after?.toFixed(1)}</td><td>{r.dest_before?.toFixed(1)}</td><td>{r.dest_after?.toFixed(1)}</td><td>{r.hrs_moved?.toFixed(1)}</td></tr>
-        ))}</tbody>
+    <div className="border-t border-border pt-4 mt-4 space-y-3">
+      <p className="text-sm font-medium text-foreground">
+        Total Hours Transferred: <span className="font-mono">{data.total_hours_moved?.toFixed(0)}</span> — Cost Impact: <span className="font-serif">{fmt(data.cost_impact)}</span>
+      </p>
+      {data.violations?.length > 0 && (
+        <p className="text-sm text-negative flex items-center gap-2">
+          <span>⚠</span> Source hours go negative in: {data.violations.join(', ')}
+        </p>
+      )}
+      <table className="w-full font-mono text-[13px]">
+        <thead>
+          <tr className="text-left text-muted-foreground border-b border-border">
+            <th className="py-2 pr-3">Month</th>
+            <th className="py-2 pr-3">Src Before</th>
+            <th className="py-2 pr-3">Src After</th>
+            <th className="py-2 pr-3">Dst Before</th>
+            <th className="py-2 pr-3">Dst After</th>
+            <th className="py-2">Moved</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.results?.map((r: any, i: number) => (
+            <tr key={i} className="border-t border-border">
+              <td className="py-2 pr-3">{r.month}</td>
+              <td className="py-2 pr-3">{r.source_before?.toFixed(1)}</td>
+              <td className="py-2 pr-3">{r.source_after?.toFixed(1)}</td>
+              <td className="py-2 pr-3">{r.dest_before?.toFixed(1)}</td>
+              <td className="py-2 pr-3">{r.dest_after?.toFixed(1)}</td>
+              <td className="py-2">{r.hrs_moved?.toFixed(1)}</td>
+            </tr>
+          ))}
+        </tbody>
       </table>
     </div>
   )
-}
+})
 
-function Kpi({ label, value }: { label: string; value: string }) {
-  return <div className="bg-card border border-border rounded-lg p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="text-lg font-bold text-foreground">{value}</p></div>
-}
-
-function Sel({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
-  return <div><label className="text-xs font-medium text-muted-foreground">{label}</label><select className="w-full mt-1 px-2 py-1.5 text-sm bg-background border border-border rounded-lg text-foreground" value={value} onChange={e => onChange(e.target.value)}>{options.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
-}
+const Sel = memo(function Sel({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label className="text-xs font-mono text-muted-foreground">{label}</label>
+      <select
+        className="w-full mt-1 px-3 py-2 text-sm bg-card border border-border rounded-[6px] text-foreground"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+      >
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  )
+})

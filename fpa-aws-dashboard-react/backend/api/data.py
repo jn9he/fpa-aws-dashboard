@@ -112,9 +112,119 @@ def get_aws(
 def get_projects():
     _, _, labor_df, _ = _get_forecasts()
     proj_summary = labor_by_project_summary(labor_df)
-    top5 = proj_summary[["Project Number", "Project Name", "Full Year Cost"]].head(5).to_dict(orient="records")
-    all_projects = proj_summary[["Project Number", "Project Name", "Full Year Cost"]].to_dict(orient="records")
+
+    # Compute Actual YTD (sum of actual months: Jan, Feb, Mar) grouped by project
+    actual_cost_cols = [f"{m}_Cost" for m in ACTUAL_MONTHS]
+    actual_ytd = (
+        labor_df.groupby(["Project Number", "Project Name"])[actual_cost_cols]
+        .sum()
+        .sum(axis=1)
+        .reset_index(name="Actual YTD")
+    )
+
+    # Get primary Owner per project (mode of Supervisor 3)
+    owner = (
+        labor_df.groupby(["Project Number", "Project Name"])["Supervisor 3"]
+        .agg(lambda x: x.mode().iloc[0] if not x.mode().empty else "Unknown")
+        .reset_index(name="Owner")
+    )
+
+    # Merge enrichments into proj_summary
+    proj_summary = proj_summary.merge(actual_ytd, on=["Project Number", "Project Name"], how="left")
+    proj_summary = proj_summary.merge(owner, on=["Project Number", "Project Name"], how="left")
+
+    # Compute Delta = Full Year Cost - Actual YTD
+    proj_summary["Actual YTD"] = proj_summary["Actual YTD"].fillna(0)
+    proj_summary["Delta"] = proj_summary["Full Year Cost"] - proj_summary["Actual YTD"]
+
+    # Rename Full Year Cost to Forecast for output
+    proj_summary = proj_summary.rename(columns={"Full Year Cost": "Forecast"})
+
+    output_cols = ["Project Number", "Project Name", "Owner", "Forecast", "Actual YTD", "Delta"]
+    top5 = proj_summary[output_cols].head(5).to_dict(orient="records")
+    all_projects = proj_summary[output_cols].to_dict(orient="records")
     return {"top5": top5, "all": all_projects}
+
+
+@router.get("/bva")
+def get_bva():
+    """Budget vs Actual drill-down: Funding BU → Project → Employee with CapEx/OpEx."""
+    _, _, labor_df, _ = _get_forecasts()
+
+    cost_cols = [f"{m}_Cost" for m in MONTHS]
+    actual_cost_cols = [f"{m}_Cost" for m in ACTUAL_MONTHS]
+
+    # Budget = full year forecast cost, Actual = sum of actual months costs
+    # Variance = prorated budget (budget * 3/12) - actual
+    labor_df = labor_df.copy()
+    labor_df["_budget"] = labor_df[cost_cols].sum(axis=1)
+    labor_df["_actual"] = labor_df[actual_cost_cols].sum(axis=1)
+    labor_df["_prorated_budget"] = labor_df["_budget"] * (len(ACTUAL_MONTHS) / 12)
+    labor_df["_variance"] = labor_df["_prorated_budget"] - labor_df["_actual"]
+
+    total_budget = labor_df["_budget"].sum()
+
+    tree = []
+    for fbu, fbu_df in labor_df.groupby("Funding Business Unit"):
+        fbu_budget = fbu_df["_budget"].sum()
+        fbu_actual = fbu_df["_actual"].sum()
+        fbu_prorated = fbu_df["_prorated_budget"].sum()
+        fbu_variance = fbu_prorated - fbu_actual
+        fbu_variance_pct = (fbu_variance / fbu_prorated * 100) if fbu_prorated else 0
+
+        projects = []
+        for (pnum, pname), proj_df in fbu_df.groupby(["Project Number", "Project Name"]):
+            classification = proj_df["Accounting Classification"].iloc[0] if "Accounting Classification" in proj_df.columns else "Unknown"
+            proj_budget = proj_df["_budget"].sum()
+            proj_actual = proj_df["_actual"].sum()
+            proj_prorated = proj_df["_prorated_budget"].sum()
+            proj_variance = proj_prorated - proj_actual
+            proj_variance_pct = (proj_variance / proj_prorated * 100) if proj_prorated else 0
+
+            employees = []
+            for emp_name, emp_df in proj_df.groupby("Employee Name"):
+                emp_budget = emp_df["_budget"].sum()
+                emp_actual = emp_df["_actual"].sum()
+                emp_prorated = emp_df["_prorated_budget"].sum()
+                emp_variance = emp_prorated - emp_actual
+                emp_variance_pct = (emp_variance / emp_prorated * 100) if emp_prorated else 0
+                employees.append({
+                    "name": emp_name,
+                    "type": "employee",
+                    "budget": round(emp_budget, 2),
+                    "actual": round(emp_actual, 2),
+                    "variance": round(emp_variance, 2),
+                    "variance_pct": round(emp_variance_pct, 1),
+                    "pct_of_total": round(emp_budget / total_budget * 100, 2) if total_budget else 0,
+                    "classification": classification,
+                })
+
+            projects.append({
+                "name": pname,
+                "type": "project",
+                "budget": round(proj_budget, 2),
+                "actual": round(proj_actual, 2),
+                "variance": round(proj_variance, 2),
+                "variance_pct": round(proj_variance_pct, 1),
+                "pct_of_total": round(proj_budget / total_budget * 100, 2) if total_budget else 0,
+                "classification": classification,
+                "children": sorted(employees, key=lambda x: x["budget"], reverse=True),
+            })
+
+        tree.append({
+            "name": fbu,
+            "type": "fbu",
+            "budget": round(fbu_budget, 2),
+            "actual": round(fbu_actual, 2),
+            "variance": round(fbu_variance, 2),
+            "variance_pct": round(fbu_variance_pct, 1),
+            "pct_of_total": round(fbu_budget / total_budget * 100, 2) if total_budget else 0,
+            "classification": "Mixed",
+            "children": sorted(projects, key=lambda x: x["budget"], reverse=True),
+        })
+
+    tree.sort(key=lambda x: x["budget"], reverse=True)
+    return {"tree": tree, "total_budget": round(total_budget, 2)}
 
 
 @router.get("/roster")

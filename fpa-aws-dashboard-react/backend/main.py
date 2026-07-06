@@ -17,10 +17,12 @@ app.add_middleware(
 from api.data import router as data_router
 from api.scenarios import router as scenarios_router
 from api.ai import router as ai_router
+from api.export import router as export_router
 
 app.include_router(data_router)
 app.include_router(scenarios_router)
 app.include_router(ai_router)
+app.include_router(export_router)
 
 
 @app.on_event("startup")

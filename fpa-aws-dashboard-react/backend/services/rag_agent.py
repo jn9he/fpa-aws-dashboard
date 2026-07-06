@@ -2,6 +2,9 @@
 import os
 import httpx
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')  # Prevent GUI backend - suppress the threading warning
+
 from langchain_openai import AzureChatOpenAI
 from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
 
@@ -33,6 +36,26 @@ df4 (aws_model): Account Number, Employee ID, Employee Name, Jan-Dec (dollar cos
 
 When answering, generate and execute pandas code against these dataframes.
 Provide clear, concise answers suitable for business stakeholders.
+
+IMPORTANT RULES FOR CHARTS:
+- Do NOT use matplotlib or plt.show(). They will fail in this environment.
+- Instead, when a chart is requested, use plotly to create figures and call fig.to_json() to get the JSON string.
+- Include the Plotly JSON string in your final answer wrapped between [PLOTLY_CHART] and [/PLOTLY_CHART] markers.
+- Example: compute data with pandas, then create a plotly figure and output its JSON.
+- You have plotly available: import plotly.express as px or import plotly.graph_objects as go
+"""
+
+# Formatting instructions appended to the user query (not the prefix)
+FORMAT_INSTRUCTIONS = """
+
+When presenting your final answer, please follow these formatting rules:
+- Format your response as markdown
+- Use **bold** for KPI values, dollar amounts, percentages, and key metrics
+- When presenting tabular data (3+ rows), use markdown tables with | column | separators
+- Keep responses concise: max 3-4 short paragraphs, prefer bullet points
+- Start with a brief executive summary (1-2 sentences)
+- Highlight key insights with > blockquotes
+- For charts: use plotly (not matplotlib), call fig.to_json(), and wrap the output between [PLOTLY_CHART] and [/PLOTLY_CHART] markers in your final answer
 """
 
 
@@ -51,7 +74,8 @@ def get_agent_response(query: str, dfs: list, chat_history: list, alerts_context
             for m in recent
         )
 
-    full_query = f"{history_text}\nUser: {query}" if history_text else query
+    # Append formatting instructions to the user query
+    full_query = f"{history_text}\nUser: {query}{FORMAT_INSTRUCTIONS}" if history_text else f"{query}{FORMAT_INSTRUCTIONS}"
 
     agent = create_pandas_dataframe_agent(
         get_llm(),

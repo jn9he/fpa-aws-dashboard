@@ -15,6 +15,8 @@ export function prefetchAll(qc: QueryClient) {
     qc.prefetchQuery({ queryKey: ['labor', { leader: 'All', type: 'All', location: 'All', fbu: 'All', project: 'All' }], queryFn: () => fetchApi('/data/labor?'), staleTime: STALE })
     qc.prefetchQuery({ queryKey: ['aws', 'All', []], queryFn: () => fetchApi('/data/aws?'), staleTime: STALE })
     qc.prefetchQuery({ queryKey: ['insights'], queryFn: () => fetchApi('/ai/insights'), staleTime: STALE })
+    qc.prefetchQuery({ queryKey: ['ai-alerts'], queryFn: () => fetchApi('/ai/alerts'), staleTime: STALE })
+    qc.prefetchQuery({ queryKey: ['bva'], queryFn: () => fetchApi('/data/bva'), staleTime: STALE })
   }
 
   if ('requestIdleCallback' in window) {

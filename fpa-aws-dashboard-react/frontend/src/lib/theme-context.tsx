@@ -1,11 +1,9 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 
 type Theme = 'light' | 'dark'
 
-const ThemeContext = createContext<{ theme: Theme; toggle: () => void }>({
-  theme: 'light',
-  toggle: () => {},
-})
+const ThemeValueContext = createContext<Theme>('light')
+const ThemeToggleContext = createContext<() => void>(() => {})
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -19,9 +17,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('theme', theme)
   }, [theme])
 
-  const toggle = () => setTheme(t => (t === 'light' ? 'dark' : 'light'))
+  const toggle = useCallback(() => setTheme(t => (t === 'light' ? 'dark' : 'light')), [])
 
-  return <ThemeContext.Provider value={{ theme, toggle }}>{children}</ThemeContext.Provider>
+  return (
+    <ThemeValueContext.Provider value={theme}>
+      <ThemeToggleContext.Provider value={toggle}>
+        {children}
+      </ThemeToggleContext.Provider>
+    </ThemeValueContext.Provider>
+  )
 }
 
-export const useTheme = () => useContext(ThemeContext)
+export const useThemeValue = () => useContext(ThemeValueContext)
+export const useThemeToggle = () => useContext(ThemeToggleContext)
+export const useTheme = () => {
+  const theme = useContext(ThemeValueContext)
+  const toggle = useContext(ThemeToggleContext)
+  return { theme, toggle }
+}
