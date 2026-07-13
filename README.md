@@ -2,6 +2,14 @@
 
 React-based financial planning & analysis tool for AWS resource and cost forecasting.
 
+
+
+https://github.com/user-attachments/assets/cfccbfd8-a284-4598-9aff-f88aa90e2b26
+
+
+
+
+
 ## Features
 
 - **Executive Summary** — High-level KPIs and portfolio overview
