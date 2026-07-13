@@ -1,6 +1,6 @@
 # FP&A AWS Planning Dashboard
 
-React-based financial planning & analysis tool for AWS resource and cost forecasting.
+React-based financial planning & analysis tool for AWS resource and cost forecasting for Charter Spectrum.
 
 
 
